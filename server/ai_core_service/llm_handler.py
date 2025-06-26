@@ -3,6 +3,8 @@ import os
 import logging
 from click import prompt
 from dotenv import load_dotenv
+import time
+from functools import lru_cache
 
 # --- SDK Imports with Graceful Fallbacks ---
 try:
@@ -343,12 +345,28 @@ def generate_sub_queries_via_llm(original_query: str, llm_provider: str, llm_mod
         return []
 
 
+# Simple in-memory cache for LLM responses (can be replaced with Redis or other persistent cache)
+llm_response_cache = {}
+CACHE_TTL_SECONDS = 300  # 5 minutes
+
+def _make_cache_key(provider, query, context, user_profile, model_name):
+    return f"{provider}|{model_name}|{query}|{context}|{user_profile}"
+
 # --- Main Response Synthesis Functions ---
-def get_gemini_response(query: str, context_text: str, model_name: str = None, user_gemini_api_key: str = None, chat_history: list = None, system_prompt: str = None, **kwargs) -> tuple[str, str | None]:
+def get_gemini_response(query: str, context_text: str, model_name: str = None, user_gemini_api_key: str = None, chat_history: list = None, system_prompt: str = None, user_profile: dict = None, **kwargs) -> tuple[str, str | None]:
+    cache_key = _make_cache_key('gemini', query, context_text, user_profile, model_name)
+    now = time.time()
+    cached = llm_response_cache.get(cache_key)
+    if cached and now - cached['ts'] < CACHE_TTL_SECONDS:
+        logger.info(f"[CACHE HIT] Gemini for key: {cache_key}")
+        return cached['response']
+    start_time = time.time()
     if not genai: raise ConnectionError("Gemini SDK not installed.")
     if not user_gemini_api_key: raise ConnectionError("User Gemini API key is required but was not provided.")
     genai.configure(api_key=user_gemini_api_key)
-    final_user_prompt = _SYNTHESIS_PROMPT_TEMPLATE_STR.format(query=query, context=context_text)
+    # Personalization: inject user profile/preferences if available
+    personalization = f"\n\n[User Preferences: {user_profile}]" if user_profile else ""
+    final_user_prompt = _SYNTHESIS_PROMPT_TEMPLATE_STR.format(query=query, context=context_text) + personalization
     model_kwargs = { "generation_config": DEFAULT_GEMINI_GENERATION_CONFIG, "safety_settings": DEFAULT_GEMINI_SAFETY_SETTINGS }
     if system_prompt: model_kwargs["system_instruction"] = system_prompt
     model = genai.GenerativeModel(model_name or GEMINI_MODEL_NAME, **model_kwargs)
@@ -363,18 +381,28 @@ def get_gemini_response(query: str, context_text: str, model_name: str = None, u
     try:
         response = chat_session.send_message(final_user_prompt)
         if (candidate := response.candidates[0] if response.candidates else None) and (candidate.finish_reason.name not in ["STOP", "MAX_TOKENS"]): logger.warning(f"Gemini response terminated unexpectedly. Reason: {candidate.finish_reason.name}")
-        # Return the raw text; Node.js server will parse it.
-        return response.text, None
+        result = (response.text, None)
+        llm_response_cache[cache_key] = {'response': result, 'ts': time.time()}
+        logger.info(f"[TIMING] Gemini LLM call took {time.time() - start_time:.2f}s")
+        return result
     except Exception as e:
         logger.error(f"Gemini API call failed during synthesis: {e}", exc_info=True)
         if 'API_KEY_INVALID' in str(e): raise ConnectionError("The provided Gemini API key is invalid.")
         raise ConnectionError("Failed to get response from Gemini.") from e
 
-def get_ollama_response(query: str, context_text: str, model_name: str = None, chat_history: list = None, system_prompt: str = None, ollama_host: str = None, **kwargs) -> tuple[str, str | None]:
+def get_ollama_response(query: str, context_text: str, model_name: str = None, chat_history: list = None, system_prompt: str = None, user_profile: dict = None, ollama_host: str = None, **kwargs) -> tuple[str, str | None]:
+    cache_key = _make_cache_key('ollama', query, context_text, user_profile, model_name)
+    now = time.time()
+    cached = llm_response_cache.get(cache_key)
+    if cached and now - cached['ts'] < CACHE_TTL_SECONDS:
+        logger.info(f"[CACHE HIT] Ollama for key: {cache_key}")
+        return cached['response']
+    start_time = time.time()
     if not ChatOllama:
         raise ConnectionError("Ollama dependencies (langchain_ollama) not available.")
 
-    final_user_prompt = _SYNTHESIS_PROMPT_TEMPLATE_STR.format(query=query, context=context_text)
+    personalization = f"\n\n[User Preferences: {user_profile}]" if user_profile else ""
+    final_user_prompt = _SYNTHESIS_PROMPT_TEMPLATE_STR.format(query=query, context=context_text) + personalization
 
     messages_for_api = []
     if system_prompt:
@@ -389,9 +417,6 @@ def get_ollama_response(query: str, context_text: str, model_name: str = None, c
                     messages_for_api.append(AIMessage(content=text_part))
     messages_for_api.append(HumanMessage(content=final_user_prompt))
 
-    # ============================
-    # RISK-MANAGED HOST FALLBACK
-    # ============================
     hosts_to_try = []
     if ollama_host:
         hosts_to_try.append(ollama_host)
@@ -406,7 +431,10 @@ def get_ollama_response(query: str, context_text: str, model_name: str = None, c
             model = ChatOllama(base_url=host, model=model_name or DEFAULT_OLLAMA_MODEL)
             response = model.invoke(messages_for_api)
             logger.info(f"Successfully received response from Ollama at: {host}")
-            return response.content, None
+            result = (response.content, None)
+            llm_response_cache[cache_key] = {'response': result, 'ts': time.time()}
+            logger.info(f"[TIMING] Ollama LLM call took {time.time() - start_time:.2f}s")
+            return result
         except Exception as e:
             logger.warning(f"Ollama request failed at {host}: {e}")
             last_exception = e
@@ -415,11 +443,19 @@ def get_ollama_response(query: str, context_text: str, model_name: str = None, c
     raise ConnectionError(f"All Ollama hosts failed. Last error: {last_exception}")
 
 
-def get_groq_llama3_response(query: str, context_text: str, model_name: str = None, user_grok_api_key: str = None, chat_history: list = None, system_prompt: str = None, **kwargs) -> tuple[str, str | None]:
+def get_groq_llama3_response(query: str, context_text: str, model_name: str = None, user_grok_api_key: str = None, chat_history: list = None, system_prompt: str = None, user_profile: dict = None, **kwargs) -> tuple[str, str | None]:
+    cache_key = _make_cache_key('groq_llama3', query, context_text, user_profile, model_name)
+    now = time.time()
+    cached = llm_response_cache.get(cache_key)
+    if cached and now - cached['ts'] < CACHE_TTL_SECONDS:
+        logger.info(f"[CACHE HIT] Groq for key: {cache_key}")
+        return cached['response']
+    start_time = time.time()
     if not Groq: raise ConnectionError("Groq SDK not installed.")
     if not user_grok_api_key: raise ConnectionError("User Groq API key is required but was not provided.")
     local_groq_client = Groq(api_key=user_grok_api_key)
-    final_user_prompt = _SYNTHESIS_PROMPT_TEMPLATE_STR.format(query=query, context=context_text)
+    personalization = f"\n\n[User Preferences: {user_profile}]" if user_profile else ""
+    final_user_prompt = _SYNTHESIS_PROMPT_TEMPLATE_STR.format(query=query, context=context_text) + personalization
     messages_for_api = []
     if system_prompt: messages_for_api.append({"role": "system", "content": system_prompt})
     if chat_history:
@@ -432,13 +468,27 @@ def get_groq_llama3_response(query: str, context_text: str, model_name: str = No
     logger.info(f"Calling Groq for synthesis (Model: {model}) with {len(messages_for_api) -1} history messages.")
     try:
         completion = local_groq_client.chat.completions.create(messages=messages_for_api, model=model)
-        # Return the raw content; Node.js server will parse it.
-        return completion.choices[0].message.content, None
+        result = (completion.choices[0].message.content, None)
+        llm_response_cache[cache_key] = {'response': result, 'ts': time.time()}
+        logger.info(f"[TIMING] Groq LLM call took {time.time() - start_time:.2f}s")
+        return result
     except Exception as e:
         logger.error(f"Groq API call failed during synthesis: {e}", exc_info=True)
         raise ConnectionError("Failed to get response from Groq.") from e
 
-def generate_response(llm_provider: str, query: str, context_text: str, **kwargs) -> tuple[str, str | None]:
+def _is_valid_llm_response(response_tuple):
+    response, _ = response_tuple if isinstance(response_tuple, tuple) else (response_tuple, None)
+    # Basic validation: non-empty and contains <thinking> and </thinking> tags (for synthesis)
+    if not response or not isinstance(response, str) or len(response.strip()) < 10:
+        return False
+    if '<thinking>' in response and '</thinking>' in response:
+        return True
+    # Accept if it's a valid mindmap or other format
+    if response.strip().startswith('mindmap'):
+        return True
+    return False
+
+def generate_response(llm_provider: str, query: str, context_text: str, user_profile: dict = None, **kwargs) -> tuple[str, str | None]:
     logger.info(f"Generating synthesized response with provider: {llm_provider}.")
     provider_map = {
         "gemini": get_gemini_response,
@@ -448,6 +498,64 @@ def generate_response(llm_provider: str, query: str, context_text: str, **kwargs
     matched_provider_key = next((key for key in provider_map if llm_provider.startswith(key)), None)
     if not matched_provider_key:
         raise ValueError(f"Unsupported LLM provider: {llm_provider}")
-    call_args = { "query": query, "context_text": context_text, **kwargs }
-    # The provider functions now return the raw text and None, which is passed on.
-    return provider_map[matched_provider_key](**call_args)
+    call_args = { "query": query, "context_text": context_text, "user_profile": user_profile, **kwargs }
+    # Try the requested provider first, but catch exceptions to allow fallback
+    try:
+        response_tuple = provider_map[matched_provider_key](**call_args)
+        if _is_valid_llm_response(response_tuple):
+            return response_tuple
+    except Exception as e:
+        logger.warning(f"Primary LLM provider '{matched_provider_key}' raised an exception: {e}")
+
+    logger.warning(f"Primary LLM provider '{matched_provider_key}' returned invalid/empty response or failed. Trying fallback providers.")
+
+    # If Ollama fails, try Gemini immediately
+    if matched_provider_key == "ollama":
+        try:
+            gemini_response = provider_map["gemini"](**call_args)
+            if _is_valid_llm_response(gemini_response):
+                logger.info("Fallback to Gemini succeeded after Ollama failure.")
+                return gemini_response
+        except Exception as e:
+            logger.warning(f"Fallback Gemini provider failed: {e}")
+
+    # Otherwise, try other providers as fallback (excluding the one already tried)
+    for key, func in provider_map.items():
+        if key == matched_provider_key or (matched_provider_key == "ollama" and key == "gemini"):
+            continue
+        try:
+            fallback_response = func(**call_args)
+            if _is_valid_llm_response(fallback_response):
+                logger.info(f"Fallback LLM provider '{key}' succeeded.")
+                return fallback_response
+        except Exception as e:
+            logger.warning(f"Fallback LLM provider '{key}' failed: {e}")
+
+    # If all fail, return a clear error
+    logger.error("All LLM providers failed to return a valid response.")
+    return "All LLM providers failed to return a valid response.", None
+
+def select_llm_provider_and_model(query: str) -> tuple[str, str]:
+    """
+    Rule-based selector for LLM provider and model based on query content.
+    Returns (provider_key, model_name)
+    """
+    q = query.lower()
+    # Example rules (customize as needed)
+    if any(word in q for word in ["reason", "why", "explain", "think", "logic"]):
+        return ("ollama", "deepseek-coder")  # Example: Deepseek for reasoning
+    if any(word in q for word in ["code", "program", "python", "java", "algorithm"]):
+        return ("groq_llama3", "qwen-72b-chat")  # Example: Qwen for technical/coding
+    if any(word in q for word in ["chat", "hello", "hi", "how are you", "talk"]):
+        return ("ollama", "llama3")  # Llama for general chat
+    # Default fallback
+    return ("gemini", None)
+
+def smart_generate_response(query: str, context_text: str, user_profile: dict = None, **kwargs) -> tuple[str, str | None]:
+    provider, model = select_llm_provider_and_model(query)
+    # Allow override from kwargs
+    provider = kwargs.get("llm_provider", provider)
+    model = kwargs.get("llm_model_name", model)
+    # Remove llm_model_name from kwargs to avoid duplicate argument
+    kwargs.pop("llm_model_name", None)
+    return generate_response(provider, query, context_text, user_profile=user_profile, llm_model_name=model, **kwargs)

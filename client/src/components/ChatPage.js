@@ -125,6 +125,7 @@ const ChatPage = ({ setIsAuthenticated }) => {
     const [isAnalysisModalOpen, setIsAnalysisModalOpen] = useState(false);
     const [analysisModalData, setAnalysisModalData] = useState(null);
     const [activeTab, setActiveTab] = useState('pending'); // 'pending' or 'accepted'
+    const [llmDebug, setLlmDebug] = useState(null);
 
     // --- Refs & Hooks ---
     const messagesEndRef = useRef(null);
@@ -226,10 +227,17 @@ const ChatPage = ({ setIsAuthenticated }) => {
             const response = await sendMessage(messageData);
             if (!response.data?.reply?.parts?.[0]) { throw new Error("Received an invalid response from the AI."); }
             setMessages(prev => [...prev, response.data.reply]);
+            // Save LLM debug info for the last assistant message
+            if (response.data.llm_debug) {
+                setLlmDebug(response.data.llm_debug);
+            } else {
+                setLlmDebug(null);
+            }
         } catch (err) {
             const errorMessage = err.response?.data?.message || 'Failed to get response.';
             setError(`Chat Error: ${errorMessage}`);
             setMessages(prev => [...prev, { role: 'model', parts: [{ text: `Error: ${errorMessage}` }], isError: true, timestamp: new Date().toISOString() }]);
+            setLlmDebug(null);
         } finally {
             setIsLoading(false);
         }
@@ -338,6 +346,12 @@ const ChatPage = ({ setIsAuthenticated }) => {
                                 <div className="message-text"><ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.parts[0].text}</ReactMarkdown></div>
                                 {msg.thinking && <details className="message-thinking-trace"><summary>Thinking Process</summary><pre>{msg.thinking}</pre></details>}
                                 {msg.references?.length > 0 && <div className="message-references"><strong>References:</strong><ul>{msg.references.map((ref, i) => <li key={i} title={ref.preview_snippet}>{ref.documentName} (Score: {ref.score?.toFixed(2)})</li>)}</ul></div>}
+                                {/* Show LLM debug info for the last assistant message */}
+                                {msg.role === 'model' && index === messages.length - 1 && llmDebug && (
+                                    <div className="llm-debug-info" style={{ fontSize: '0.8em', color: '#888', marginTop: '0.5em' }}>
+                                        <span>LLM: {llmDebug.selected_provider} ({llmDebug.selected_model || 'default'})</span>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     ))}

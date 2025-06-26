@@ -192,11 +192,15 @@ router.post('/message', tempAuth, async (req, res) => {
             references: pythonResponse.data.references || [],
             thinking: thinking, // Use the parsed thinking content
         };
+        // Forward llm_debug if present
+        const responsePayload = { reply: modelResponseMessage };
+        if (pythonResponse.data.llm_debug) {
+            responsePayload.llm_debug = pythonResponse.data.llm_debug;
+        }
+        res.status(200).json(responsePayload);
         // ==================================================================
         //  END OF MODIFICATION
         // ==================================================================
-
-        res.status(200).json({ reply: modelResponseMessage });
 
     } catch (error) {
         console.error(`!!! Error in /message route for session ${sessionId}:`, error.message);

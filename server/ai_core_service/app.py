@@ -217,8 +217,9 @@ def generate_chat_response_route():
     try:
         logger.info(f"Calling LLM provider: {llm_provider} for user: {user_id}")
 
-        final_answer, thinking_content = llm_handler.generate_response(
-            llm_provider=llm_provider,
+        # === USE SMART MULTI-LLM SELECTOR ===
+        provider, model = llm_handler.select_llm_provider_and_model(current_user_query)
+        final_answer, thinking_content = llm_handler.smart_generate_response(
             query=current_user_query,
             context_text=context_text_for_llm,
             chat_history=chat_history,
@@ -233,6 +234,10 @@ def generate_chat_response_route():
             "llm_response": final_answer,
             "references": rag_references_for_client,
             "thinking_content": thinking_content,
+            "llm_debug": {
+                "selected_provider": provider,
+                "selected_model": model
+            },
             "status": "success"
         }), 200
 
