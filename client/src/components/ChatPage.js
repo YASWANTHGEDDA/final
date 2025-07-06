@@ -20,6 +20,9 @@ import FileManagerWidget from './FileManagerWidget';
 import AnalysisResultModal from './AnalysisResultModal';
 import VoiceInputButton from './VoiceInputButton';
 
+import ToolSettingsPanel from './ToolSettingsPanel';
+import ToolsPanel from './ToolsPanel';
+
 // --- Icons ---
 import { FiMessageSquare, FiDatabase, FiSettings, FiLogOut, FiSun, FiMoon, FiSend, FiPlus, FiArchive, FiShield } from 'react-icons/fi';
 
@@ -27,6 +30,8 @@ import { FiMessageSquare, FiDatabase, FiSettings, FiLogOut, FiSun, FiMoon, FiSen
 import './ChatPage.css';
 
 // --- UI Sub-Components (for organization) ---
+import { FiTool } from 'react-icons/fi';
+
 const ActivityBar = ({ activeView, setActiveView }) => (
     <div className="activity-bar">
         <button className={`activity-button ${activeView === 'ASSISTANT' ? 'active' : ''}`} onClick={() => setActiveView('ASSISTANT')} title="Assistant Settings">
@@ -34,6 +39,9 @@ const ActivityBar = ({ activeView, setActiveView }) => (
         </button>
         <button className={`activity-button ${activeView === 'DATA' ? 'active' : ''}`} onClick={() => setActiveView('DATA')} title="Data Sources">
             <FiDatabase size={24} />
+        </button>
+        <button className={`activity-button ${activeView === 'TOOLS' ? 'active' : ''}`} onClick={() => setActiveView('TOOLS')} title="Tool Settings">
+            <FiTool size={24} />
         </button>
     </div>
 );
@@ -71,6 +79,7 @@ const AssistantSettingsPanel = (props) => (
                 <input type="checkbox" id="multi-query-toggle" checked={props.enableMultiQuery} onChange={props.handleMultiQueryToggle} disabled={props.isProcessing || !props.isRagEnabled} />
             </div>
         </div>
+        {/* Removed Tool Settings Panel from Assistant Settings */}
     </div>
 );
 
@@ -86,6 +95,7 @@ const Sidebar = ({ activeView, ...props }) => (
     <div className="sidebar-area">
         {activeView === 'ASSISTANT' && <AssistantSettingsPanel {...props} />}
         {activeView === 'DATA' && <DataSourcePanel {...props} />}
+        {activeView === 'TOOLS' && <ToolsPanel />}
     </div>
 );
 
@@ -321,6 +331,7 @@ const ChatPage = ({ setIsAuthenticated }) => {
                         <ThemeToggleButton />
                         <button onClick={handleHistory} className="header-button" title="Chat History" disabled={isLoading}><FiArchive size={20} /></button>
                         <button onClick={handleNewChat} className="header-button" title="New Chat" disabled={isLoading}><FiPlus size={20} /></button>
+                        <button onClick={() => setActiveView('TOOLS')} className="header-button" title="AI Tools" disabled={isLoading}><FiTool size={20} /></button>
                         <button onClick={() => navigate('/settings')} className="header-button" title="Settings" disabled={isLoading}><FiSettings size={20} /></button>
                         {userRole === 'admin' && (
                             <button onClick={() => navigate('/admin')} className="header-button admin-button" title="Admin Panel">

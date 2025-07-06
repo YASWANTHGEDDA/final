@@ -9,6 +9,7 @@ import { ThemeProvider } from './context/ThemeContext';
 const AuthPage = React.lazy(() => import('./components/AuthPage'));
 const ChatPage = React.lazy(() => import('./components/ChatPage'));
 const SettingsPage = React.lazy(() => import('./components/SettingsPage'));
+const ToolsPanel = React.lazy(() => import('./components/ToolsPanel'));
 
 // ==================================================================
 //  START OF NEW FEATURE MODIFICATION
@@ -86,6 +87,15 @@ function App() {
                                 element={
                                     <ProtectedRoute>
                                         <SettingsPage />
+                                    </ProtectedRoute>
+                                }
+                            />
+                            
+                            <Route
+                                path="/tools"
+                                element={
+                                    <ProtectedRoute>
+                                        <ToolsPanel />
                                     </ProtectedRoute>
                                 }
                             />

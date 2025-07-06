@@ -54,6 +54,12 @@ app.use('/api/analysis', require('./routes/analysis'));
 app.use('/api/settings', require('./routes/settings'));
 app.use('/api/admin', require('./routes/admin'));
 
+// --- AI Tools Routes ---
+app.use('/api/tools', require('./routes/tools'));
+
+// --- Direct Tool Endpoints (for backward compatibility) ---
+app.use('/', require('./routes/tools'));
+
 // --- Global Error Handler ---
 app.use((err, req, res, next) => {
     console.error("Unhandled Error:", err.stack || err);

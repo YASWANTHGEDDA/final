@@ -1,0 +1,56 @@
+.tool-settings-panel {
+  padding: 10px;
+  font-family: Arial, sans-serif;
+  color: #fff;
+  background-color: #222;
+  height: 100%;
+  overflow-y: auto;
+}
+
+.tool-section {
+  margin-bottom: 20px;
+}
+
+.tool-section h4 {
+  margin-bottom: 8px;
+  font-size: 1.1em;
+  border-bottom: 1px solid #444;
+  padding-bottom: 4px;
+}
+
+.tool-section input[type="text"],
+.tool-section textarea {
+  width: 100%;
+  padding: 6px;
+  margin-bottom: 6px;
+  border: 1px solid #555;
+  border-radius: 4px;
+  background-color: #333;
+  color: #eee;
+  font-size: 0.9em;
+  resize: vertical;
+}
+
+.tool-section button {
+  padding: 6px 12px;
+  background-color: #007bff;
+  border: none;
+  border-radius: 4px;
+  color: white;
+  cursor: pointer;
+  font-size: 0.9em;
+}
+
+.tool-section button:disabled {
+  background-color: #555;
+  cursor: not-allowed;
+}
+
+.result-message {
+  margin-top: 10px;
+  padding: 8px;
+  background-color: #444;
+  border-radius: 4px;
+  font-size: 0.9em;
+  white-space: pre-wrap;
+}

@@ -16,6 +16,8 @@ langchain-ollama      # For Ollama integration with Langchain
 # AI - LLM & Embeddings Libraries
 ollama                # Direct Ollama client library
 sentence-transformers # For generating sentence embeddings (primary for RAG)
+google-generativeai   # For Gemini API
+groq                  # For Groq API
 
 # AI - Vector Store
 # Choose one of the FAISS packages based on your environment:
@@ -36,8 +38,22 @@ tiktoken              # Tokenizer used by OpenAI models, often useful with Langc
 requests              # General purpose HTTP client
 httpx                 # Modern HTTP client, supports async
 
-# ... other requirements ...
-google-generativeai
+# Search and Download Tools
+duckduckgo_search     # For web search functionality
+arxiv                 # For arXiv paper downloads
 
-# ... other requirements ...
-groq
+# Audio Processing
+gtts                  # Google Text-to-Speech for PDF to audio conversion
+
+# Progress and Utilities
+tqdm                  # Progress bars
+pandas                # Data manipulation for journal tools
+
+# Academic Research Tools
+scholarly             # Google Scholar API wrapper
+
+# OCR and Document Processing
+nougat-ocr
+albumentations==1.3.0
+transformers==4.36.2
+pynougat[all]
