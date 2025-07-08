@@ -154,7 +154,18 @@ export default function ToolSettingsPanel() {
           <div>
             <strong>Files:</strong>
             <ul>
-              {pdfResult.files?.map((f, i) => <li key={i}>{f}</li>)}
+              {pdfResult.files?.map((f, i) => (
+                <li key={i}>
+                  <a
+                    href={`http://localhost:5003/pdfs/${encodeURIComponent(f)}`}
+                    download={f}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    {f}
+                  </a>
+                </li>
+              ))}
             </ul>
             {pdfResult.errors?.length > 0 && (
               <div style={{ color: 'red' }}>

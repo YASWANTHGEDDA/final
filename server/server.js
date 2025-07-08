@@ -41,6 +41,7 @@ let pythonServiceUrl = process.env.PYTHON_AI_CORE_SERVICE_URL || '';
 const app = express();
 app.use(cors()); // This line will now work correctly
 app.use(express.json());
+app.use('/pdfs', express.static(path.join(__dirname, 'ai_core_service')));
 
 // --- Route Registration ---
 app.get('/', (req, res) => res.send('Chatbot Backend API is running...'));
@@ -84,6 +85,14 @@ app.post('/api/pdf_to_audio', async (req, res) => {
   } catch (err) {
     res.status(err.response?.status || 500).json({ error: err.message, details: err.response?.data });
   }
+});
+app.get('/pdfs/:filename', (req, res) => {
+  const filePath = path.join(__dirname, 'ai_core_service', 'pdfs', req.params.filename);
+  res.download(filePath, req.params.filename, (err) => {
+    if (err) {
+      res.status(404).send('File not found');
+    }
+  });
 });
 
 // --- Global Error Handler ---

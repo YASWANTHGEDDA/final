@@ -33,6 +33,11 @@ except ImportError:
     PromptTemplate = None
     logging.warning("Langchain PromptTemplate not found; analysis prompts will use string formatting.")
 
+# --- Deepseek and Qwen SDK Placeholders ---
+# Replace with real SDK imports if available
+DeepseekClient = None  # Placeholder for Deepseek API client
+QwenClient = None      # Placeholder for Qwen API client
+
 # --- Service Configuration ---
 try:
     from . import config as service_config
@@ -438,16 +443,45 @@ def get_groq_llama3_response(query: str, context_text: str, model_name: str = No
         logger.error(f"Groq API call failed during synthesis: {e}", exc_info=True)
         raise ConnectionError("Failed to get response from Groq.") from e
 
+def select_llm_provider(query: str) -> str:
+    """
+    Select the best LLM provider based on the query intent.
+    Extend this logic as needed for more nuanced routing.
+    """
+    q = query.lower()
+    if any(word in q for word in ["reason", "explain", "why", "how", "analyze", "logic"]):
+        return "deepseek"
+    if any(word in q for word in ["code", "python", "error", "bug", "technical", "api", "stack trace"]):
+        return "qwen"
+    if any(word in q for word in ["hi", "hello", "chat", "talk", "conversation", "friend"]):
+        return "ollama"
+    return "gemini"  # Default fallback
+
+def get_deepseek_response(query: str, context_text: str, model_name: str = None, chat_history: list = None, system_prompt: str = None, **kwargs) -> tuple[str, str | None]:
+    # Placeholder implementation for Deepseek API
+    # Replace with real API call
+    return ("[Deepseek] This is a placeholder response for reasoning tasks.", None)
+
+def get_qwen_response(query: str, context_text: str, model_name: str = None, chat_history: list = None, system_prompt: str = None, **kwargs) -> tuple[str, str | None]:
+    # Placeholder implementation for Qwen API
+    # Replace with real API call
+    return ("[Qwen] This is a placeholder response for technical/engineering tasks.", None)
+
 def generate_response(llm_provider: str, query: str, context_text: str, **kwargs) -> tuple[str, str | None]:
     logger.info(f"Generating synthesized response with provider: {llm_provider}.")
     provider_map = {
         "gemini": get_gemini_response,
         "ollama": get_ollama_response,
         "groq_llama3": get_groq_llama3_response,
+        "deepseek": get_deepseek_response,
+        "qwen": get_qwen_response,
     }
+    if llm_provider == "auto":
+        selected_provider = select_llm_provider(query)
+        logger.info(f"[Auto-routing] Selected provider: {selected_provider}")
+        llm_provider = selected_provider
     matched_provider_key = next((key for key in provider_map if llm_provider.startswith(key)), None)
     if not matched_provider_key:
         raise ValueError(f"Unsupported LLM provider: {llm_provider}")
     call_args = { "query": query, "context_text": context_text, **kwargs }
-    # The provider functions now return the raw text and None, which is passed on.
     return provider_map[matched_provider_key](**call_args)

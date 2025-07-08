@@ -236,7 +236,14 @@ const ChatPage = ({ setIsAuthenticated }) => {
         try {
             const response = await sendMessage(messageData);
             if (!response.data?.reply?.parts?.[0]) { throw new Error("Received an invalid response from the AI."); }
-            setMessages(prev => [...prev, response.data.reply]);
+            setMessages(prev => [
+                ...prev,
+                {
+                    ...response.data.reply,
+                    provider: response.data.llm_provider_used || null,
+                    model: response.data.llm_model_used || null
+                }
+            ]);
         } catch (err) {
             const errorMessage = err.response?.data?.message || 'Failed to get response.';
             setError(`Chat Error: ${errorMessage}`);
@@ -347,6 +354,11 @@ const ChatPage = ({ setIsAuthenticated }) => {
                             <div className="message-content-wrapper">
                                 <p className="message-sender-name">{msg.role === 'user' ? username : 'Assistant'}</p>
                                 <div className="message-text"><ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.parts[0].text}</ReactMarkdown></div>
+                                {msg.role === 'model' && msg.provider && (
+                                    <div className="llm-provider-label" style={{ margin: '8px 0 4px 0', fontWeight: 'bold', color: '#1976d2' }}>
+                                        LLM Used: {msg.provider.toUpperCase()}{msg.model ? ` (${msg.model})` : ''}
+                                    </div>
+                                )}
                                 {msg.thinking && <details className="message-thinking-trace"><summary>Thinking Process</summary><pre>{msg.thinking}</pre></details>}
                                 {msg.references?.length > 0 && <div className="message-references"><strong>References:</strong><ul>{msg.references.map((ref, i) => <li key={i} title={ref.preview_snippet}>{ref.documentName} (Score: {ref.score?.toFixed(2)})</li>)}</ul></div>}
                             </div>

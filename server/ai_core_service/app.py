@@ -9,6 +9,7 @@ from .pdf_downloaderV2 import download_pdfs_api
 from .pdf2audio import convert_pdf_to_audio_api
 from .journal_open import fetch_all_core_results_api
 from dotenv import load_dotenv
+from .Search_download import gather_resources  # Use relative import for package compatibility
 load_dotenv()
 
 try:
@@ -28,6 +29,8 @@ app = Flask(__name__)
 CORS(app)
 
 load_dotenv()
+
+PDF_DIR = os.path.join(os.path.dirname(__file__), 'pdfs')
 
 def create_error_response(message, status_code=500):
     logger.error(f"API Error Response ({status_code}): {message}")
@@ -177,7 +180,7 @@ def generate_chat_response_route():
     current_user_query = data.get('query')
     chat_history = data.get('chat_history', [])
     system_prompt = data.get('system_prompt')
-    llm_provider = data.get('llm_provider', config.DEFAULT_LLM_PROVIDER)
+    llm_provider = data.get('llm_provider', 'auto')  # Use 'auto' for multi-LLM routing by default
     llm_model_name = data.get('llm_model_name', None)
     perform_rag = data.get('perform_rag', True)
     enable_multi_query = data.get('enable_multi_query', True)
@@ -225,6 +228,8 @@ def generate_chat_response_route():
     try:
         logger.info(f"Calling LLM provider: {llm_provider} for user: {user_id}")
 
+        # To test a specific LLM, set llm_provider in the request to 'gemini', 'ollama', 'groq_llama3', 'deepseek', or 'qwen'.
+        # To use auto-routing, set llm_provider to 'auto' or omit it (default).
         final_answer, thinking_content = llm_handler.generate_response(
             llm_provider=llm_provider,
             query=current_user_query,
@@ -236,11 +241,20 @@ def generate_chat_response_route():
             user_grok_api_key=user_grok_api_key,
             ollama_host=ollama_host
         )
+        # Determine which provider and model were actually used (after auto-routing)
+        if llm_provider == 'auto':
+            provider_used = llm_handler.select_llm_provider(current_user_query)
+            model_used = llm_model_name or None
+        else:
+            provider_used = llm_provider
+            model_used = llm_model_name or None
 
         return jsonify({
             "llm_response": final_answer,
             "references": rag_references_for_client,
             "thinking_content": thinking_content,
+            "llm_provider_used": provider_used,
+            "llm_model_used": model_used,
             "status": "success"
         }), 200
 
@@ -255,6 +269,9 @@ def process_markdown_route():
     data = request.get_json()
     input_file = data.get('input_file')
     generate_files = data.get('generate_files', True)
+    # If input_file is not an absolute path, look in pdfs dir
+    if input_file and not os.path.isabs(input_file):
+        input_file = os.path.join(PDF_DIR, os.path.basename(input_file))
     if not input_file:
         return create_error_response("Missing input_file", 400)
     if not os.path.exists(input_file):
@@ -298,6 +315,9 @@ def pdf_to_audio_route():
     pdf_file = data.get('pdf_file')
     chunk_duration_min = data.get('chunk_duration_min', 30)
     overlap_seconds = data.get('overlap_seconds', 5)
+    # If pdf_file is not an absolute path, look in pdfs dir
+    if pdf_file and not os.path.isabs(pdf_file):
+        pdf_file = os.path.join(PDF_DIR, os.path.basename(pdf_file))
     if not pdf_file:
         return create_error_response("Missing pdf_file", 400)
     if not os.path.exists(pdf_file):
@@ -328,6 +348,19 @@ def download_journals_route():
         return jsonify(result), 200
     except Exception as e:
         return create_error_response(f"Failed to download journals: {e}", 500)
+
+@app.route('/gather_resources', methods=['POST'])
+def gather_resources_route():
+    data = request.get_json()
+    query = data.get('query')
+    resource_types = data.get('resource_types', None)
+    if not query:
+        return jsonify({'error': 'Missing query'}), 400
+    try:
+        results = gather_resources(query, resource_types)
+        return jsonify({'results': results})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     # Startup logic is unchanged
