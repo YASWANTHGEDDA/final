@@ -221,7 +221,7 @@ def generate_chat_response_route():
     try:
         logger.info(f"Calling LLM provider: {llm_provider} for user: {user_id}")
 
-        final_answer, thinking_content = llm_handler.generate_response(
+        final_answer, thinking_content, used_provider = llm_handler.generate_response(
             llm_provider=llm_provider,
             query=current_user_query,
             context_text=context_text_for_llm,
@@ -236,11 +236,12 @@ def generate_chat_response_route():
         # Performance monitoring
         elapsed_time = time.time() - start_time
         logger.info(f"Request {request_id} completed in {elapsed_time:.2f}s")
-        
+
         return jsonify({
             "llm_response": final_answer,
             "references": rag_references_for_client,
             "thinking_content": thinking_content,
+            "used_provider": used_provider,
             "status": "success",
             "performance": {
                 "response_time": elapsed_time,

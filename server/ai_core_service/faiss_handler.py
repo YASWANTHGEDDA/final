@@ -378,7 +378,7 @@ def query_index(user_id, query_text, k=3, active_file=None):
                     
                     user_results = user_index.similarity_search_with_score(query, k=k)
                     logger.info(f"User index '{user_id}' query returned {len(user_results)} results for query: {query[:50]}...")
-                    all_results_with_scores.extend(user_results)
+                all_results_with_scores.extend(user_results)
             else:
                 logger.info(f"Skipping query for user '{user_id}': Index is empty or invalid.")
         except FileNotFoundError:

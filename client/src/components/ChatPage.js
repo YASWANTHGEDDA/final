@@ -99,18 +99,27 @@ const ThemeToggleButton = () => {
 };
 
 function parseThinkingAndAnswer(fullResponse) {
-    if (typeof fullResponse !== 'string') return { answer: fullResponse, thinking: null };
+    if (typeof fullResponse !== 'string') return { answer: String(fullResponse), thinking: null };
     const thinkStartTag = "<thinking>";
     const thinkEndTag = "</thinking>";
     const startIndex = fullResponse.indexOf(thinkStartTag);
     const endIndex = fullResponse.indexOf(thinkEndTag, startIndex);
 
+    let answer = fullResponse;
+    let thinking = null;
+
     if (startIndex !== -1 && endIndex !== -1) {
-        const thinking = fullResponse.substring(startIndex + thinkStartTag.length, endIndex).trim();
-        const answer = fullResponse.substring(endIndex + thinkEndTag.length).trim();
-        return { answer, thinking };
+        thinking = fullResponse.substring(startIndex + thinkStartTag.length, endIndex).trim();
+        answer = fullResponse.substring(endIndex + thinkEndTag.length).trim();
     }
-    return { answer: fullResponse, thinking: null };
+
+    // Remove all leading/trailing code block markers and whitespace
+    answer = answer.replace(/^[\s`]+|[\s`]+$/g, '');
+
+    // If the answer is now empty, provide a fallback
+    if (!answer) answer = '[No answer provided by the AI]';
+
+    return { answer, thinking };
 }
 
 // ===================================================================================
@@ -244,14 +253,17 @@ const ChatPage = ({ setIsAuthenticated }) => {
         };
         try {
             const response = await sendMessage(messageData);
-            const aiText = response.data?.reply?.parts?.[0]?.text || '';
+            const aiText = response.data?.reply?.parts?.[0]?.text || response.data?.llm_response || '';
             const { answer, thinking } = parseThinkingAndAnswer(aiText);
+            // Try all possible locations for usedProvider
+            const usedProvider = response.data?.used_provider || response.data?.reply?.used_provider || response.data?.reply?.usedProvider || null;
             const modelMessage = {
                 role: 'model',
                 parts: [{ text: answer }],
                 thinking: thinking,
                 timestamp: new Date(),
-                references: response.data.reply.references || [],
+                references: response.data.reply?.references || response.data?.references || [],
+                usedProvider: usedProvider,
             };
             setMessages(prev => [...prev, modelMessage]);
         } catch (err) {
@@ -362,8 +374,12 @@ const ChatPage = ({ setIsAuthenticated }) => {
                     {messages.map((msg, index) => (
                         <div key={`${sessionId}-${index}`} className={`message ${msg.role.toLowerCase()}${msg.isError ? '-error-message' : ''}`}>
                             <div className="message-content-wrapper">
-                                <p className="message-sender-name">{msg.role === 'user' ? username : 'Assistant'}</p>
-                                <div className="message-text"><ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.parts[0].text}</ReactMarkdown></div>
+                                <p className="message-sender-name">{msg.role === 'user' ? username : 'Assistant'}
+                                    {msg.role === 'model' && msg.usedProvider && (
+                                        <span className="llm-provider-badge" title={`LLM used: ${msg.usedProvider}`}> ({msg.usedProvider})</span>
+                                    )}
+                                </p>
+                                <div className="message-text"><ReactMarkdown remarkPlugins={[remarkGfm]}>{String(msg.parts[0].text)}</ReactMarkdown></div>
                                 {msg.thinking && <details className="message-thinking-trace"><summary>Thinking Process</summary><pre>{msg.thinking}</pre></details>}
                                 {msg.references?.length > 0 && <div className="message-references"><strong>References:</strong><ul>{msg.references.map((ref, i) => <li key={i} title={ref.preview_snippet}>{ref.documentName} (Score: {ref.score?.toFixed(2)})</li>)}</ul></div>}
                             </div>

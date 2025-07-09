@@ -155,32 +155,32 @@ EXECUTE NOW.
             input_variables=["doc_text_for_llm", "num_items"],
             template="""You are an expert text-to-Mermaid-syntax converter specializing in creating hierarchical mind maps from technical documents.
 
-**CRITICAL SYNTAX RULES:**
-1.  **MANDATORY START:** The entire response MUST begin with the word `mindmap` on the very first line.
-2.  **HIERARCHY VIA INDENTATION:** The structure of the mind map is defined ONLY by indentation. Each level of sub-topic MUST be indented more than its parent. Use two spaces for each level of indentation.
-3.  **SINGLE ROOT:** There can only be ONE top-level (unindented or minimally indented) node after the `mindmap` keyword. All other nodes must be children of this single root, indicated by increased indentation.
-4.  **NO INVALID KEYWORDS:** Do NOT use keywords like `child()`. The hierarchy is implicit from indentation.
-5.  **NO CONVERSATION:** Your output MUST NOT contain any explanations, introductions, apologies, or markdown fences (```). The output must be PURE Mermaid syntax.
-6.  **QUANTITY:** Generate a mind map with approximately {num_items} nodes.
+                **CRITICAL SYNTAX RULES:**
+                1.  **MANDATORY START:** The entire response MUST begin with the word `mindmap` on the very first line.
+                2.  **HIERARCHY VIA INDENTATION:** The structure of the mind map is defined ONLY by indentation. Each level of sub-topic MUST be indented more than its parent. Use two spaces for each level of indentation.
+                3.  **SINGLE ROOT:** There can only be ONE top-level (unindented or minimally indented) node after the `mindmap` keyword. All other nodes must be children of this single root, indicated by increased indentation.
+                4.  **NO INVALID KEYWORDS:** Do NOT use keywords like `child()`. The hierarchy is implicit from indentation.
+                5.  **NO CONVERSATION:** Your output MUST NOT contain any explanations, introductions, apologies, or markdown fences (```). The output must be PURE Mermaid syntax.
+                6.  **QUANTITY:** Generate a mind map with approximately {num_items} nodes.
 7.  **ORGANIZATION:** Group related concepts together and create logical hierarchies.
 
-**EXAMPLE OF PERFECT SYNTAX:**
-mindmap
-root((Main Topic))
-    Sub-Topic A
-    Detail 1
-    Detail 2
-    Sub-Topic B
-    Sub-Topic C
-    Detail 3
+                **EXAMPLE OF PERFECT SYNTAX:**
+                mindmap
+                root((Main Topic))
+                    Sub-Topic A
+                    Detail 1
+                    Detail 2
+                    Sub-Topic B
+                    Sub-Topic C
+                    Detail 3
 
---- START DOCUMENT TEXT ---
-{doc_text_for_llm}
---- END DOCUMENT TEXT ---
+                --- START DOCUMENT TEXT ---
+                {doc_text_for_llm}
+                --- END DOCUMENT TEXT ---
 
-EXECUTE NOW. CREATE THE MERMAID MIND MAP.
-"""
-        ),
+                EXECUTE NOW. CREATE THE MERMAID MIND MAP.
+                """
+                        ),
     }
     logger.info("Enhanced ANALYSIS_PROMPTS initialized using Langchain PromptTemplate objects.")
 else:
@@ -525,43 +525,91 @@ def get_groq_llama3_response(query: str, context_text: str, model_name: str = No
         logger.error(f"Groq API call failed during synthesis: {e}", exc_info=True)
         raise ConnectionError("Failed to get response from Groq.") from e
 
-def generate_response(llm_provider: str, query: str, context_text: str, **kwargs) -> tuple[str, str | None]:
-    """Enhanced main function to generate response using specified LLM provider with caching and performance optimizations."""
-    
-    # Check cache first
+# Add Deepseek and Qwen handlers (via Ollama)
+def get_deepseek_response(query, context_text, model_name=None, chat_history=None, system_prompt=None, ollama_host=None, **kwargs):
+    return get_ollama_response(query, context_text, model_name=model_name or 'deepseek', chat_history=chat_history, system_prompt=system_prompt, ollama_host=ollama_host, **kwargs)
+
+def get_qwen_response(query, context_text, model_name=None, chat_history=None, system_prompt=None, ollama_host=None, **kwargs):
+    return get_ollama_response(query, context_text, model_name=model_name or 'qwen', chat_history=chat_history, system_prompt=system_prompt, ollama_host=ollama_host, **kwargs)
+
+# Routing table for conversation modes
+LLM_ROUTING_TABLE = {
+    'chat': 'llama3',
+    'reasoning': 'deepseek',
+    'technical': 'qwen',
+}
+
+def detect_conversation_mode(prompt: str) -> str:
+    prompt_lower = prompt.lower()
+    if any(word in prompt_lower for word in ["prove", "reason", "step by step", "why", "derive", "analyze", "explain your reasoning"]):
+        return "reasoning"
+    if any(word in prompt_lower for word in ["technical", "specification", "api", "code", "algorithm", "implementation", "syntax"]):
+        return "technical"
+    return "chat"
+
+# Enhanced dispatcher with auto-detection and provider return
+def generate_response(llm_provider: str, query: str, context_text: str, conversation_mode: str = None, **kwargs) -> tuple[str, str | None, str]:
+    """
+    Enhanced main function to generate response using specified LLM provider with caching and performance optimizations.
+    If conversation_mode is provided, use the routing table to select the LLM.
+    If Ollama fails, fallback to Gemini, then Groq.
+    Returns (response, thinking, used_provider)
+    """
     cached_response = response_cache.get(query, context_text, llm_provider, kwargs.get('model_name'))
     if cached_response:
-        return cached_response, None
-    
-    # Acquire request slot for rate limiting
+        return cached_response, None, llm_provider
     if not request_queue.acquire():
         raise RuntimeError("Request queue is full. Please try again later.")
-    
     try:
         start_time = time.time()
-        
-        logger.info(f"Generating synthesized response with provider: {llm_provider}.")
         provider_map = {
             "gemini": get_gemini_response,
             "ollama": get_ollama_response,
+            "llama3": lambda *a, **k: get_ollama_response(*a, model_name='llama3', **k),
             "groq_llama3": get_groq_llama3_response,
+            "deepseek": get_deepseek_response,
+            "qwen": get_qwen_response,
         }
-        matched_provider_key = next((key for key in provider_map if llm_provider.startswith(key)), None)
+        # Auto-detect mode if not provided
+        if not conversation_mode:
+            conversation_mode = detect_conversation_mode(query)
+        selected_provider = llm_provider
+        if conversation_mode:
+            selected_provider = LLM_ROUTING_TABLE.get(conversation_mode, llm_provider)
+        matched_provider_key = next((key for key in provider_map if selected_provider.startswith(key)), None)
         if not matched_provider_key:
-            raise ValueError(f"Unsupported LLM provider: {llm_provider}")
-        
+            raise ValueError(f"Unsupported LLM provider: {selected_provider}")
         call_args = { "query": query, "context_text": context_text, **kwargs }
-        response = provider_map[matched_provider_key](**call_args)
-        
-        # Cache the response
-        response_cache.set(query, context_text, llm_provider, kwargs.get('model_name'), response)
-        
-        # Log performance metrics
+        response = None
+        used_provider = selected_provider
+        # Fallback logic for Ollama-based providers
+        if matched_provider_key in ["ollama", "llama3", "deepseek", "qwen"]:
+            try:
+                response = provider_map[matched_provider_key](**call_args)
+                used_provider = matched_provider_key
+            except Exception as ollama_error:
+                logger.warning(f"Ollama-based LLM '{matched_provider_key}' failed: {ollama_error}. Trying Gemini fallback...")
+                try:
+                    response = provider_map["gemini"](**call_args)
+                    used_provider = "gemini"
+                except Exception as gemini_error:
+                    logger.warning(f"Gemini fallback failed: {gemini_error}. Trying Groq fallback...")
+                    try:
+                        response = provider_map["groq_llama3"](**call_args)
+                        used_provider = "groq_llama3"
+                    except Exception as groq_error:
+                        logger.error(f"All LLM fallbacks failed: {groq_error}")
+                        raise groq_error
+        else:
+            response = provider_map[matched_provider_key](**call_args)
+            used_provider = matched_provider_key
+        response_cache.set(query, context_text, used_provider, kwargs.get('model_name'), response)
         elapsed_time = time.time() - start_time
-        logger.info(f"Response generated in {elapsed_time:.2f}s using {llm_provider}")
-        
-        return response
-        
+        logger.info(f"Response generated in {elapsed_time:.2f}s using {used_provider}")
+        # If response is a tuple (answer, thinking), return both, else just answer
+        if isinstance(response, tuple) and len(response) == 2:
+            return response[0], response[1], used_provider
+        return response, None, used_provider
     except Exception as e:
         logger.error(f"Error generating response with {llm_provider}: {e}", exc_info=True)
         raise
