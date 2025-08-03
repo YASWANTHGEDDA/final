@@ -95,6 +95,10 @@ systemctl enable mongod
 sudo apt update
 sudo apt install ffmpeg
 
+# Docker
+sudo apt install -y docker.io
+sudo systemctl enable --now docker
+
 ---
 
 ## 🚀 Getting Started
