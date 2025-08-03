@@ -1,4 +1,4 @@
-# FusedChatbotNew
+# AI DRIVEN STUDENT CHATBOT
 
 ![React](https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)
 ![Node.js](https://img.shields.io/badge/Node.js-339933?style=for-the-badge&logo=nodedotjs&logoColor=white)
@@ -29,7 +29,13 @@ FusedChatbotNew is a full-stack conversational AI application that integrates a 
 *   *Chat Deletion:* Delete chat sessions for privacy and clutter management.
 *   *Enhanced UI:* Modern, intuitive interface for a seamless user experience.
 *   *Admin Pannel:* Users seeking access to Admin API keys can submit a request directly through the interface. Admins are automatically notified via email, and upon approval or rejection, users receive real-                        time status updates through email notifications.
-
+*   *Autonomus Agent:* Automatically plan, execute, and adapt tasks using goal-driven logic powered by open-source models like LLaMA-3 and Zephyr  and it was equipped with a dynamic toolbox like smart_search, web_search to find answers
+*   *Prompt Enhancer:* The system automatically rewrites user prompts to make them clearer and more focused, helps to  understand better and give more accurate answers.
+*   *Quiz Generator:* Upload a document, and the system automatically builds a quiz from the content.
+*   *Code Compiler:* Write and run code (Python, JS, etc.) directly in the chat with instant results.It also helps us to find errors and clearly explain with suggestions to improve or fix the code.
+*   *Flashcard Generation:* Converts documents into ready-to-use flashcards with terms,definitions and concepts.
+*   **Podcast Generator:** Converts any document or topic into an engaging AI-generated podcast featuring two distinct voices in a conversational format.Users can interact with the podcast in real time by pausing and asking follow-up questions, creating a dynamic learning experience.
+*   *Chat Enhancement:* Uses Redis caching to deliver faster responses by storing commonly used answers, chat context, and document previews.
 
 ---
 
@@ -61,6 +67,8 @@ This project uses a scalable *microservice-oriented architecture* to separate co
 
 ## ✅ Prerequisites
 
+*   *FFmpeg:* [Link](https://www.gyan.dev/ffmpeg/builds/)
+        1.after download sucessful you need to add the bin directory to your system's envi path
 *   *Node.js:* v16 or higher with npm.
 *   *Python:* v3.9 or higher with pip.
 *   *Git:* For cloning the repository.
@@ -82,6 +90,10 @@ sudo apt update
 sudo apt install -y mongodb-org
 systemctl start mongod
 systemctl enable mongod
+
+# Install ffmpeg
+sudo apt update
+sudo apt install ffmpeg
 
 ---
 
@@ -165,6 +177,14 @@ npm install
 ---
 ## Running the Application
 ###Run the three services in separate terminal windows
+## Running the Neo4j services
+```bash
+docker run --name neo4j-db -p 7474:7474 -p 7687:7687 -d -e NEO4J_AUTH=neo4j/test neo4j:latest
+```
+## Running Redis services
+```bash
+docker run --name redis-server -p 6379:6379 -d redis:latest
+```
 
 ### Terminal 1: Start the AI Core Service (Python)
 ```bash
