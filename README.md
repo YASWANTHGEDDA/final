@@ -250,7 +250,8 @@ npm install
 docker run -d --name neo4j-db --restart unless-stopped -p 7474:7474 -p 7687:7687 -e NEO4J_AUTH=neo4j/test neo4j:latest
 ```
 ## Running Redis services
-```bashdocker run -d --name redis-server --restart unless-stopped -p 6379:6379 redis:latest
+```bash
+docker run -d --name redis-server --restart unless-stopped -p 6379:6379 redis:latest
 ```
 ### Terminal 1: Start the AI Core Service (Python)
 ```bash
