@@ -242,6 +242,12 @@ pip install -r requirements.txt
 cd ../../client
 npm install
 ```
+#### MCP Dependencies 
+``` bash
+cd ../../mcp-server-duckduckgo-search
+npm install
+```
+
 ---
 ## Running the Application
 ###Run the three services in separate terminal windows
@@ -253,7 +259,18 @@ docker run -d --name neo4j-db --restart unless-stopped -p 7474:7474 -p 7687:7687
 ```bash
 docker run -d --name redis-server --restart unless-stopped -p 6379:6379 redis:latest
 ```
-### Terminal 1: Start the AI Core Service (Python)
+### Terminal 1: start the MCP server 
+``` bash
+cd mcp-servers
+
+cd mcp-server-duckduckgo-search
+# activating the server
+
+npm run dev
+
+``` 
+
+### Terminal 2: Start the AI Core Service (Python)
 ```bash
 cd server
 
@@ -268,13 +285,13 @@ cd..  #run the command in the server
 python -m ai_core_service.app
 ```
 
-### Terminal 2: Start the Backend Server (Node.js)
+### Terminal 3: Start the Backend Server (Node.js)
 ```bash
 cd server
 node server.js
 ```
 
-### Terminal 3: Start the Frontend (React)
+### Terminal 4: Start the Frontend (React)
 ```bash
 cd client
 npm start
